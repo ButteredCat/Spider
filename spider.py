@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 
 from HTMLParser import HTMLParser 
+import Queue
 
 import requests as req
 
@@ -39,15 +40,32 @@ class MoviePageParser(HTMLParser):
 
 init_page = u'http://movie.douban.com/subject/4876722/'
 api_url = u'http://api.douban.com/v2/movie/'
+movie_link = u'http://movie.douban.com/subject/'
+
+def add_ids(queue, ids):
+    for each_id in ids:
+        queue.put(each_id)
 
 def main():
+    queue = Queue.Queue()
+    seen = set()
     r = req.get(init_page)
     parser = MoviePageParser()
     ids = parser.get_adj_movie_ids(r.text)
-    for each_id in ids:
-        r = req.get(api_url + str(each_id))
-        if r.status_code == 200:
-            print r.json()[u'title']
+    add_ids(queue, ids)
+    while(True):
+        if queue.qsize() > 0:
+            each_id = queue.get()
+            if each_id not in seen:
+                r = req.get(api_url + str(each_id))
+                if r.status_code == 200:
+                    print r.json()[u'title']
+                    seen.add(each_id)
+                r = req.get(movie_link + str(each_id))
+                ids = parser.get_adj_movie_ids(r.text)
+                add_ids(queue, ids)
+        else:
+            break
 
 
 if __name__=='__main__':

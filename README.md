@@ -1,2 +1,2 @@
 # Spider
-a spider to collect DouBan movies
+A spider to collect DouBan movies
