@@ -14,7 +14,7 @@ class MoviePageParser(HTMLParser):
         HTMLParser.__init__(self)
 
     def handle_starttag(self, tag, attrs):
-        if tag == 'a':
+        if tag == u'a':
             for attr in attrs:
                 if self.__is_movie_link(attr):
                     movie_id = self.__get_id(attr[1])
@@ -37,8 +37,8 @@ class MoviePageParser(HTMLParser):
         return int(movie_id) if movie_id.isnumeric() else None
 
 
-init_page = 'http://movie.douban.com/subject/4876722/'
-api_url = 'http://api.douban.com/v2/movie/'
+init_page = u'http://movie.douban.com/subject/4876722/'
+api_url = u'http://api.douban.com/v2/movie/'
 
 def main():
     r = req.get(init_page)
@@ -47,7 +47,7 @@ def main():
     for each_id in ids:
         r = req.get(api_url + str(each_id))
         if r.status_code == 200:
-            print r.json()['title']
+            print r.json()[u'title']
 
 
 if __name__=='__main__':
