@@ -6,28 +6,40 @@ import Queue
 
 import requests as req
 
-class MoviePageParser(HTMLParser):
+class Parser(HTMLParser):
     movie_link = u'http://movie.douban.com/subject/'
-
+        
     def __init__(self):
-        self.__movie_id = []
-        self.__movie_info = {}
+        self.restore()
         HTMLParser.__init__(self)
+
+    def restore(self):
+        self.title = False
+        self.movie = {}
+        self.movie['adj_movies'] = set()
 
     def handle_starttag(self, tag, attrs):
         if tag == u'a':
             for attr in attrs:
                 if self.__is_movie_link(attr):
                     movie_id = self.__get_id(attr[1])
-                    if movie_id is not None and \
-                        movie_id not in self.__movie_id:
-                        self.__movie_id.append(movie_id)
+                    if movie_id is not None:
+                        self.movie['adj_movies'].add(movie_id)
+        if tag == u'title':
+            self.title = True
 
+    def handle_data(self, data):
+        if self.title:
+            self.movie['title'] = data[ : data.find(u'(') ].strip()
 
-    def get_adj_movie_ids(self, page):
+    def handle_endtag(self, tag):
+        self.title = False
+
+    def parse(self, page):
+        self.restore()
         self.feed(page)
         self.close()
-        return self.__movie_id
+        return self.movie
 
     def __is_movie_link(self, attr):
         return attr[0] == u'href' and attr[1].startswith(self.movie_link) 
@@ -37,9 +49,8 @@ class MoviePageParser(HTMLParser):
         movie_id = link[ : link.find(u'/') ]
         return int(movie_id) if movie_id.isnumeric() else None
 
-
+    
 init_page = u'http://movie.douban.com/subject/4876722/'
-api_url = u'http://api.douban.com/v2/movie/'
 movie_link = u'http://movie.douban.com/subject/'
 
 def add_ids(queue, ids):
@@ -50,20 +61,21 @@ def main():
     queue = Queue.Queue()
     seen = set()
     r = req.get(init_page)
-    parser = MoviePageParser()
-    ids = parser.get_adj_movie_ids(r.text)
-    add_ids(queue, ids)
+    parser = Parser()
+    movie = parser.parse(r.text)
+    add_ids(queue, movie['adj_movies'])
     while(True):
         if queue.qsize() > 0:
             each_id = queue.get()
             if each_id not in seen:
-                r = req.get(api_url + str(each_id))
-                if r.status_code == 200:
-                    print r.json()[u'title']
-                    seen.add(each_id)
                 r = req.get(movie_link + str(each_id))
-                ids = parser.get_adj_movie_ids(r.text)
-                add_ids(queue, ids)
+                if r.status_code == 200:
+                    movie = parser.parse(r.text)
+                    add_ids(queue, movie['adj_movies'])
+                    print movie[u'title']
+                    seen.add(each_id)
+                else:
+                    print 'error'
         else:
             break
 
