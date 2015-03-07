@@ -2,9 +2,11 @@
 # -*- coding:utf-8 -*-
 
 from HTMLParser import HTMLParser 
-import Queue
+from Queue import Queue
 
 import requests as req
+
+from multithreads import MT
 
 class Parser(HTMLParser):
     movie_link = u'http://movie.douban.com/subject/'
@@ -51,34 +53,70 @@ class Parser(HTMLParser):
 
     
 init_page = u'http://movie.douban.com/subject/4876722/'
+
+
+def get_page(page_q, id_q, seen):
+    while True:
+        print 'page_q.size = ', page_q.qsize(), \
+              'id_q.size = ', id_q.qsize()
+        movie_id = id_q.get(block=1)
+        movie_link = u'http://movie.douban.com/subject/'
+        r = req.get(movie_link + str(movie_id))
+        if r.status_code == 200:
+            page_q.put((movie_id, r.text), block=1)
+        else:
+            print 'error'
+
+def parse_page(page_q, id_q, seen):
+    while True:
+        print 'page_q.size = ', page_q.qsize(), \
+              'id_q.size = ', id_q.qsize()
+        page = page_q.get(1)
+        parser = Parser()
+        movie = parser.parse(page[1])
+        print movie['title']
+        for each_id in movie['adj_movies']:
+            id_q.put(each_id, 1)
+            seen.add(page[0])
+
 movie_link = u'http://movie.douban.com/subject/'
 
-def add_ids(queue, ids):
-    for each_id in ids:
-        queue.put(each_id)
+def spider(id_q, seen):
+    while True:
+        movie_id = id_q.get(block=1)
+        http_req = req.get(movie_link + str(movie_id))
+        if http_req.status_code == 200:
+            parser = Parser()
+            movie_info = parser.parse(http_req.text)
+            for each_id in movie_info['adj_movies']:
+                id_q.put(each_id, block=1)
+                seen.add(movie_id)
+        else:
+            print 'err'
+        
+
+funcs = [get_page, get_page, get_page, parse_page]
+nfuncs = range(len(funcs))
 
 def main():
-    queue = Queue.Queue()
+    page_q = Queue(10)
+    id_q = Queue(20)
     seen = set()
-    r = req.get(init_page)
-    parser = Parser()
-    movie = parser.parse(r.text)
-    add_ids(queue, movie['adj_movies'])
-    while(True):
-        if queue.qsize() > 0:
-            each_id = queue.get()
-            if each_id not in seen:
-                r = req.get(movie_link + str(each_id))
-                if r.status_code == 200:
-                    movie = parser.parse(r.text)
-                    add_ids(queue, movie['adj_movies'])
-                    print movie[u'title']
-                    seen.add(each_id)
-                else:
-                    print 'error'
-        else:
-            break
 
+    id_q.put(4876722) #init page
 
+    threads = []
+    for i in nfuncs:
+        t = MT(funcs[i], (page_q, id_q, seen), funcs[i].__name__)
+        threads.append(t)
+
+    for i in nfuncs:
+        threads[i].start()
+
+    for i in nfuncs:
+        threads[i].join()
+
+    print 'DONE'
+    
 if __name__=='__main__':
     main()
