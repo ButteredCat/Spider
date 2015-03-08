@@ -7,6 +7,7 @@ from Queue import Queue
 import requests as req
 
 from multithreads import MT
+from lockedset import LockedSet
 
 class Parser(HTMLParser):
     movie_link = u'http://movie.douban.com/subject/'
@@ -53,61 +54,44 @@ class Parser(HTMLParser):
 
     
 init_page = u'http://movie.douban.com/subject/4876722/'
-
-
-def get_page(page_q, id_q, seen):
-    while True:
-        print 'page_q.size = ', page_q.qsize(), \
-              'id_q.size = ', id_q.qsize()
-        movie_id = id_q.get(block=1)
-        movie_link = u'http://movie.douban.com/subject/'
-        r = req.get(movie_link + str(movie_id))
-        if r.status_code == 200:
-            page_q.put((movie_id, r.text), block=1)
-        else:
-            print 'error'
-
-def parse_page(page_q, id_q, seen):
-    while True:
-        print 'page_q.size = ', page_q.qsize(), \
-              'id_q.size = ', id_q.qsize()
-        page = page_q.get(1)
-        parser = Parser()
-        movie = parser.parse(page[1])
-        print movie['title']
-        for each_id in movie['adj_movies']:
-            id_q.put(each_id, 1)
-            seen.add(page[0])
-
 movie_link = u'http://movie.douban.com/subject/'
 
 def spider(id_q, seen):
     while True:
         movie_id = id_q.get(block=1)
-        http_req = req.get(movie_link + str(movie_id))
-        if http_req.status_code == 200:
-            parser = Parser()
-            movie_info = parser.parse(http_req.text)
-            for each_id in movie_info['adj_movies']:
-                id_q.put(each_id, block=1)
+        if movie_id not in seen:
+            http_req = req.get(movie_link + str(movie_id))
+            if http_req.status_code == 200:
+                parser = Parser()
+                movie_info = parser.parse(http_req.text)
                 seen.add(movie_id)
-        else:
-            print 'err'
-        
+                print movie_info['title']
+                for each_id in movie_info['adj_movies']:
+                    id_q.put(each_id, block=1)
+            else:
+                print 'err'
 
-funcs = [get_page, get_page, get_page, parse_page]
+def q_maintainer(id_q, seen):
+    while True:
+        if id_q.full():
+            id_q.get()
+        elif id_q.empty():
+            pass
+            
+
+funcs = [spider, spider, spider, spider, q_maintainer]
 nfuncs = range(len(funcs))
 
 def main():
-    page_q = Queue(10)
-    id_q = Queue(20)
-    seen = set()
+    id_q = Queue(90)
+    seen = LockedSet()
 
     id_q.put(4876722) #init page
+    print len(funcs)
 
     threads = []
     for i in nfuncs:
-        t = MT(funcs[i], (page_q, id_q, seen), funcs[i].__name__)
+        t = MT(funcs[i], (id_q, seen), funcs[i].__name__)
         threads.append(t)
 
     for i in nfuncs:
