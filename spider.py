@@ -59,17 +59,19 @@ movie_link = u'http://movie.douban.com/subject/'
 def spider(id_q, seen):
     while True:
         movie_id = id_q.get(block=1)
-        if movie_id not in seen:
-            http_req = req.get(movie_link + str(movie_id))
-            if http_req.status_code == 200:
-                parser = Parser()
-                movie_info = parser.parse(http_req.text)
-                seen.add(movie_id)
-                print movie_info['title']
-                for each_id in movie_info['adj_movies']:
+        seen.add(movie_id)
+        http_req = req.get(movie_link + str(movie_id))
+        if http_req.status_code == 200:
+            parser = Parser()
+            movie_info = parser.parse(http_req.text)
+            print movie_info['title']
+            for each_id in movie_info['adj_movies']:
+                if each_id not in seen:
                     id_q.put(each_id, block=1)
-            else:
-                print 'err'
+        else:
+            id_q.put(movie_id, 1)
+            seen.remove(movie_id)
+            print 'err'
 
 def q_maintainer(id_q, seen):
     while True:
