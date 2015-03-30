@@ -6,8 +6,8 @@ from Queue import Queue
 
 import requests as req
 
-from multithreads import MT
-from lockedset import LockedSet
+from multithreads.multithreads import MT
+from multithreads.lockedset import LockedSet
 
 class Parser(HTMLParser):
     movie_link = u'http://movie.douban.com/subject/'
